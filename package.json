@@ -1,0 +1,17 @@
+{
+  "name": "benr2324",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "azure": "^0.7.18",
+    "express": "^4.19.1",
+    "mongodb": "^6.5.0",
+    "run": "^1.5.0"
+  }
+}
