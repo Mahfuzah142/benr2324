@@ -2,6 +2,7 @@ const express = require('express')
 const app = express()
 const port = process.env.PORT || 3000;
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 app.use(express.json())
 // new user registration
@@ -37,7 +38,11 @@ app.post('/login',async(req, res) => {
     //result.password = req.body.password
 
     if(bcrypt.compareSync(req.body.password, result.password) == true){
-      res.send("Login successfully")
+      var token = jwt.sign({
+        _id: result._id,
+        username : result.username
+      }, 'mysupersecretpasskey',{expiresIn: 10*60});
+      res.send(token)
     }else{
       res.send("Wrong password")
     }
@@ -46,26 +51,52 @@ app.post('/login',async(req, res) => {
 
 })
 
-// get user profile
-app.get('/user/:siapadia/:emaildia', async (req, res) => {
-  // findOne
-  let result = await client.db('maybank2u').collection('users').findOne({
-    username: req.params.siapadia,
-    email: req.params.emaildia
-  })
-  res.send(result)
+app.post('/buy', async (req, res) => {
+  const token=(req.headers.authorization.split(' ')[1])
+
+  var decoded = jwt.verify(token, 'mysupersecretpasskey');
+  console.log(decoded)
 })
+// get user profile
+app.get('/user/:id', async (req, res) => {
+  // findOne)
+  const token=(req.headers.authorization.split(' ')[1])
+  let decoded = jwt.verify(token, 'mysupersecretpasskey');
+
+  if (decoded) {
+    if (decoded._id == req.params.id){
+      let result = await client.db('maybank2u').collection('users').findOne({
+        _id: new ObjectId(req.params.id)  
+      })
+      res.send(result)
+    }else{
+      res.status(401).send('Unauthorized Access') 
+    }
+  }
+}); // Add closing parenthesis and semicolon here
 
 // update user account
-app.patch('/user', (req, res) => {
+app.patch('/user/:id', async (req, res) => {
   // updateOne
-  console.log('update user profile')
+  let result = await client.db('maybank2u').collection('users').updateOne()
+  {
+    _id: new  ObjectId(req.params.id)
+  }
+  {
+    $set: {
+      name: req.body.name
+    }
+  }
+      
 })
 
 // delete user account
-app.delete('/user', (req, res) => {
-  // deleteOne
-  console.log('delete user account')
+app.delete('/user/:id', (req, res) => {
+  //let result = await client.db('maybank2u').collection('users').deleteOne(
+   // {
+    //  _id: ObjectId(req.params.id)
+  //  }
+ // )
 })
 
 app.listen(port, () => {
@@ -73,7 +104,7 @@ app.listen(port, () => {
 })
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const uri = "mongodb+srv://soo:passwordbaharu@cluster0.nehnjjb.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+const uri = "mongodb+srv://nurmahfuzah03:Mahfuzah03@mahfuzah03.blu6t3a.mongodb.net/?retryWrites=true&w=majority&appName=Mahfuzah03";
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
