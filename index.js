@@ -1,6 +1,6 @@
 const express = require('express');
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 5500;
 const bcrypt = require('bcrypt');
 const path = require('path');
 const cors = require('cors'); 
@@ -29,7 +29,7 @@ run().catch(console.dir);
 
 app.use(cors()); // Enable CORS for all routes
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'))); // Serve static files from the 'public' directory
 
 app.post('/register', async (req, res) => {
   try {
@@ -54,12 +54,12 @@ app.post('/login', async (req, res) => {
     });
 
     if (!result) {
-      res.send("Username not found");
+      res.status(404).send("Username not found");
     } else {
       if (bcrypt.compareSync(req.body.password, result.password)) {
         res.send("Login successfully");
       } else {
-        res.send("Wrong password");
+        res.status(401).send("Wrong password");
       }
     }
   } catch (err) {
@@ -67,7 +67,6 @@ app.post('/login', async (req, res) => {
     res.status(500).send('Login failed');
   }
 });
-
 
 app.patch('/updateUser', async (req, res) => {
   try {
@@ -101,7 +100,6 @@ app.patch('/updateUser', async (req, res) => {
   }
 });
 
-
 app.delete('/deleteUser/:username', async (req, res) => {
   try {
     const username = req.params.username;
@@ -119,8 +117,6 @@ app.delete('/deleteUser/:username', async (req, res) => {
     res.status(500).send('Internal server error');
   }
 });
-
-
 
 // Serve the HTML file
 app.get('/', (req, res) => {
