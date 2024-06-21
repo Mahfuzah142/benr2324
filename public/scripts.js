@@ -1,12 +1,10 @@
 document.addEventListener("DOMContentLoaded", function() {
   const container = document.getElementById("container");
 
-  // Function to clear the container
   function clearContainer() {
     container.innerHTML = '';
   }
 
-  // Function to display welcome message with Register and Login buttons
   function displayWelcomeMessage() {
     container.innerHTML = `
       <h1>Welcome to Pinggu World!</h1>
@@ -18,7 +16,6 @@ document.addEventListener("DOMContentLoaded", function() {
     document.getElementById("showLoginButton").addEventListener("click", showLoginForm);
   }
 
-  // Function to show registration form
   function showRegistrationForm() {
     clearContainer();
     container.innerHTML = `
@@ -41,13 +38,16 @@ document.addEventListener("DOMContentLoaded", function() {
           <input type="email" id="email" name="email" required>
         </div>
         <button type="submit">Register</button>
+        <button type="button" id="backButton">Back</button>
       </form>
     `;
+
+    document.getElementById("backButton").addEventListener("click", displayWelcomeMessage);
 
     const registrationForm = document.getElementById("registrationForm");
 
     registrationForm.addEventListener("submit", async function(event) {
-      event.preventDefault(); // Prevent form submission
+      event.preventDefault();
 
       const formData = new FormData(registrationForm);
       const username = formData.get("username");
@@ -56,7 +56,7 @@ document.addEventListener("DOMContentLoaded", function() {
       const email = formData.get("email");
 
       try {
-        const response = await fetch("http://localhost:5500/register", {
+        const response = await fetch("http://localhost:5500/user", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
@@ -69,20 +69,19 @@ document.addEventListener("DOMContentLoaded", function() {
           })
         });
         if (response.ok) {
-          // Registration successful, redirect to login form
           showLoginForm();
         } else {
-          console.error("Registration failed");
-          alert("Registration failed. Please try again.");
+          const errorText = await response.text();
+          console.error("Registration failed:", errorText);
+          alert(`Registration failed: ${errorText}`);
         }
       } catch (error) {
         console.error("Error during registration:", error);
-        alert("An error occurred during registration. Please try again later.");
+        alert(`An error occurred during registration: ${error.message}`);
       }
     });
   }
 
-  // Function to show login form
   function showLoginForm() {
     clearContainer();
     container.innerHTML = `
@@ -97,13 +96,16 @@ document.addEventListener("DOMContentLoaded", function() {
           <input type="password" id="loginPassword" name="password" required>
         </div>
         <button type="submit">Login</button>
+        <button type="button" id="backButton">Back</button>
       </form>
     `;
+
+    document.getElementById("backButton").addEventListener("click", displayWelcomeMessage);
 
     const loginForm = document.getElementById("loginForm");
 
     loginForm.addEventListener("submit", async function(event) {
-      event.preventDefault(); // Prevent form submission
+      event.preventDefault();
 
       const formData = new FormData(loginForm);
       const username = formData.get("username");
@@ -120,23 +122,26 @@ document.addEventListener("DOMContentLoaded", function() {
             password: password
           })
         });
+
         if (response.ok) {
-          // Login successful, show interface with play and setting buttons
-          showInterface(username);
+          const data = await response.json();
+          localStorage.setItem("authToken", data.token);
+          alert("Login successful!");
+
+          showInterface(username, data.role);
         } else {
           const errorText = await response.text();
           console.error("Login failed:", errorText);
-          alert(errorText);
+          alert(`Login failed: ${errorText}`);
         }
       } catch (error) {
         console.error("Error during login:", error);
-        alert("An error occurred during login. Please try again later.");
+        alert(`An error occurred during login: ${error.message}`);
       }
     });
   }
 
-  // Function to show interface with play and setting buttons
-  function showInterface(username) {
+  function showInterface(username, role) {
     clearContainer();
     container.innerHTML = `
       <h2>Welcome, ${username}!</h2>
@@ -145,25 +150,35 @@ document.addEventListener("DOMContentLoaded", function() {
     `;
 
     document.getElementById("settingButton").addEventListener("click", function() {
-      clearContainer();
-      container.innerHTML = `
-        <h2>Settings</h2>
-        <button id="updateInfoButton">Update Info</button>
-        <button id="deleteAccountButton">Delete Account</button>
-      `;
-
-      document.getElementById("updateInfoButton").addEventListener("click", function() {
-        showUpdateForm(username);
-      });
-
-      document.getElementById("deleteAccountButton").addEventListener("click", function() {
-        deleteAccount(username);
-      });
+      showSettings(username, role);
     });
   }
 
-  // Function to show update form
-  function showUpdateForm(currentUsername) {
+  function showSettings(username, role) {
+    clearContainer();
+    container.innerHTML = `
+      <h2>Settings</h2>
+      <button id="updateInfoButton">Update Info</button>
+      ${role === 'admin' ? '<button id="deleteAccountButton">Delete Account</button>' : ''}
+      <button id="backButton">Back</button>
+    `;
+
+    document.getElementById("backButton").addEventListener("click", function() {
+      showInterface(username, role);
+    });
+
+    document.getElementById("updateInfoButton").addEventListener("click", function() {
+      showUpdateForm(username, role);
+    });
+
+    if (role === 'admin') {
+      document.getElementById("deleteAccountButton").addEventListener("click", function() {
+        showPasskeyForm(username, role);
+      });
+    }
+  }
+
+  function showUpdateForm(currentUsername, role) {
     clearContainer();
     container.innerHTML = `
       <h2>Update Info</h2>
@@ -177,13 +192,18 @@ document.addEventListener("DOMContentLoaded", function() {
           <input type="password" id="newPassword" name="newPassword">
         </div>
         <button type="submit">Update</button>
+        <button type="button" id="backButton">Back</button>
       </form>
     `;
+
+    document.getElementById("backButton").addEventListener("click", function() {
+      showSettings(currentUsername, role);
+    });
 
     const updateForm = document.getElementById("updateForm");
 
     updateForm.addEventListener("submit", async function(event) {
-      event.preventDefault(); // Prevent form submission
+      event.preventDefault();
 
       const formData = new FormData(updateForm);
       const updatedInfo = {
@@ -192,7 +212,7 @@ document.addEventListener("DOMContentLoaded", function() {
       };
 
       try {
-        const response = await fetch('http://localhost:5500/updateUser', {
+        const response = await fetch(`http://localhost:5500/updateUser`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json'
@@ -205,42 +225,126 @@ document.addEventListener("DOMContentLoaded", function() {
         if (response.ok) {
           console.log('User information updated successfully');
           alert('User information updated successfully');
-          showInterface(updatedInfo.username); // Update the interface with the new username
+          showSettings(updatedInfo.username || currentUsername, role);
         } else {
           const errorText = await response.text();
           console.error('Failed to update user information:', errorText);
-          alert('Failed to update user information. Please try again.');
+          alert(`Failed to update user information: ${errorText}`);
         }
       } catch (error) {
         console.error('Error updating user information:', error);
-        alert('An error occurred while updating user information. Please try again later.');
+        alert(`An error occurred while updating user information: ${error.message}`);
       }
     });
   }
 
-  // Function to delete account
-  async function deleteAccount(username) {
-    if (!confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      return;
-    }
+  function showPasskeyForm(username, role) {
+    clearContainer();
+    container.innerHTML = `
+      <h2>Enter Passkey</h2>
+      <form id="passkeyForm">
+        <div class="form-group">
+          <label for="passkey">Passkey:</label>
+          <input type="text" id="passkey" name="passkey" required>
+        </div>
+        <button type="submit">Submit</button>
+        <button type="button" id="backButton">Back</button>
+      </form>
+    `;
 
-    try {
-      const response = await fetch(`http://localhost:5500/deleteUser/${username}`, {
-        method: "DELETE"
-      });
-      if (response.ok) {
-        console.log("User account deleted successfully");
-        alert("User account deleted successfully");
-        displayWelcomeMessage();
-      } else {
-        const errorText = await response.text();
-        console.error("Failed to delete user account:", errorText);
-        alert("Failed to delete user account. Please try again.");
+    document.getElementById("backButton").addEventListener("click", function() {
+      showSettings(username, role);
+    });
+
+    const passkeyForm = document.getElementById("passkeyForm");
+
+    passkeyForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      const formData = new FormData(passkeyForm);
+      const passkey = formData.get("passkey");
+
+      try {
+        const response = await fetch(`http://localhost:5500/requestDeleteToken`, {
+          method: "POST",
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ passkey })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          showDeleteForm(username, role, data.token);
+        } else {
+          const errorText = await response.text();
+          console.error("Passkey verification failed:", errorText);
+          alert(`Passkey verification failed: ${errorText}`);
+        }
+      } catch (error) {
+        console.error("Error verifying passkey:", error);
+        alert(`An error occurred while verifying passkey: ${error.message}`);
       }
-    } catch (error) {
-      console.error("Error deleting user account:", error);
-      alert("An error occurred while deleting user account. Please try again later.");
-    }
+    });
+  }
+
+  function showDeleteForm(username, role, deleteToken) {
+    clearContainer();
+    container.innerHTML = `
+      <h2>Delete Account</h2>
+      <form id="deleteForm">
+        <div class="form-group">
+          <label for="deleteUsername">Enter Username to Delete:</label>
+          <input type="text" id="deleteUsername" name="deleteUsername" required>
+        </div>
+        <div class="form-group">
+          <label for="deleteToken">Enter Token:</label>
+          <input type="text" id="deleteToken" name="deleteToken" required>
+        </div>
+        <button type="submit">Delete</button>
+        <button type="button" id="backButton">Back</button>
+      </form>
+    `;
+
+    document.getElementById("backButton").addEventListener("click", function() {
+      showSettings(username, role);
+    });
+
+    const deleteForm = document.getElementById("deleteForm");
+
+    deleteForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      const formData = new FormData(deleteForm);
+      const deleteUsername = formData.get("deleteUsername");
+      const token = formData.get("deleteToken");
+
+      if (token !== deleteToken) {
+        alert("Invalid token");
+        return;
+      }
+
+      try {
+        const response = await fetch(`http://localhost:5500/deleteUser/${deleteUsername}`, {
+          method: "DELETE",
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          console.log("User account deleted successfully");
+          alert("User account deleted successfully");
+          showSettings(username, role);
+        } else {
+          const errorText = await response.text();
+          console.error("Failed to delete user account:", errorText);
+          alert(`Failed to delete user account: ${errorText}`);
+        }
+      } catch (error) {
+        console.error("Error deleting user account:", error);
+        alert(`An error occurred while deleting user account: ${error.message}`);
+      }
+    });
   }
 
   displayWelcomeMessage();
