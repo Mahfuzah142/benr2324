@@ -736,6 +736,11 @@ app.delete('/scores/:username', verifyUser, async (req, res) => {
  // res.sendFile(path.join(__dirname, 'public', 'assignment.html')); // Serve HTML file
 //});
 
+// Serve the main HTML page
+app.get('/', (req, res) => {
+  res.send('Welcome to the main page!');
+});
+
 // Start the Express server
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`); // Log server start
