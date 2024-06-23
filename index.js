@@ -85,7 +85,16 @@ async function verifyUser(req, res, next) {
   next(); // Proceed to next middleware or route handler
 }
 
-// Register endpoint
+function validateNumericLevel(req, res, next) {
+  const { level } = req.body;
+
+  if (typeof level !== 'number' || isNaN(level) || level < 0) {
+    return res.status(400).json({ error: 'Level must be a positive number' });
+  }
+
+  next();
+}
+
 // Register endpoint
 app.post('/register', async (req, res) => {
   try {
@@ -312,8 +321,8 @@ function generateLevelDescription(level) {
   return descriptions[level] || "No description available for this level."; // Return description or default message
 }
 
-// Create level endpoint
-app.post('/createLevel', verifyUser, async (req, res) => {
+// Create level endpoint with validation
+app.post('/createLevel', verifyUser, validateNumericLevel, async (req, res) => {
   try {
     const { username, level } = req.body; // Get username and level from request body
     const levelDescription = generateLevelDescription(level); // Generate level description
@@ -354,8 +363,8 @@ app.get('/getLevel/:username', verifyUser, async (req, res) => {
   }
 });
 
-// Update level endpoint
-app.patch('/updateLevel/:username', verifyUser, async (req, res) => {
+// Update level endpoint with validation
+app.patch('/updateLevel/:username', verifyUser, validateNumericLevel, async (req, res) => {
   try {
     const username = req.params.username; // Get username from request parameters
     const { level } = req.body; // Get level from request body
@@ -527,8 +536,8 @@ app.get('/inventory/:username', verifyUser, async (req, res) => {
   }
 });
 
-// Update inventory endpoint
-app.patch('/inventory', verifyUser, async (req, res) => {
+// Update inventory endpoint with validation
+app.patch('/inventory', verifyUser, validateNumericLevel, async (req, res) => {
   try {
     const { username, level } = req.body; // Get username and level from request body
 
@@ -639,8 +648,8 @@ app.get('/scores/:username', verifyUser, async (req, res) => {
   }
 });
 
-// Update score by username endpoint
-app.patch('/scores/:username', verifyUser, async (req, res) => {
+// Update score by username endpoint with validation
+app.patch('/scores/:username', verifyUser, validateNumericLevel, async (req, res) => {
   try {
     const { level } = req.body; // Get level from request body
 
