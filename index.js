@@ -49,7 +49,8 @@ run().catch(console.dir); // Catch and log any errors
 // Middleware setup
 app.use(cors()); // Enable CORS for cross-origin requests
 app.use(express.json()); // Parse JSON bodies in incoming requests
-//app.use(express.static(path.join(__dirname, 'public'))); // Serve static files from the 'public' directory
+app.use(express.static(path.join(__dirname, 'public'))); // Serve static files from the 'public' directory
+
 
 // Function to verify JWT token
 function verifyToken(req, res, next) {
@@ -738,7 +739,7 @@ app.delete('/scores/:username', verifyUser, async (req, res) => {
 
 // Serve the main HTML page
 app.get('/', (req, res) => {
-  res.send('Welcome to the main page!');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Start the Express server
