@@ -221,7 +221,7 @@ document.addEventListener("DOMContentLoaded", function() {
         <button id="showInventoryBtn">Inventory</button>
       </div>
     `;
-
+//
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
