@@ -51,7 +51,7 @@ app.use(cors()); // Enable CORS for cross-origin requests
 app.use(express.json()); // Parse JSON bodies in incoming requests
 app.use(express.static(path.join(__dirname, 'public'))); // Serve static files from the 'public' directory
 
-//
+////
 // Function to verify JWT token
 function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization; // Get authorization header from the request
