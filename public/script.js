@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", function() {
   // Function to display welcome message with Register and Login buttons
   function displayWelcomeMessage() {
     container.innerHTML = `
-        <h1>Welcome to Pinggu World!</h1>
+        <h1>Hello! Welcome to Bouncey Boo!</h1>
         <div id="welcome-buttons">
             <button id="showRegisterButton">Register</button>
             <button id="showLoginButton">Login</button>
