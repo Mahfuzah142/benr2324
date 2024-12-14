@@ -6,13 +6,13 @@ body, html {
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: #28aec2; /* Light green background */
+    background-color: #69e9c5; /* Light green background */
 }
 
 /* Main container for dynamic content */
 #container {
     text-align: center;
-    background-color: white;
+    background-color: rgb(60, 33, 211);
     padding: 20px;
     border-radius: 15px;
     box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
