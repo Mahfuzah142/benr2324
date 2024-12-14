@@ -6,7 +6,7 @@ body, html {
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: #DFFFE1; /* Light green background */
+    background-color: #eedfff; /* Light green background */
 }
 
 /* Main container for dynamic content */
