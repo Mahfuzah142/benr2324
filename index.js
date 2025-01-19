@@ -11,6 +11,7 @@ require('dotenv').config(); // Import dotenv for environment variables
 const uuid = require('uuid');
 const nodemailer = require('nodemailer');
 const moment = require('moment');
+const verificationCodes = {};
 
 // MongoDB connection URI
 const uri = process.env.MONGODB_URI; // MongoDB URI for connection
@@ -80,8 +81,7 @@ async function verifyUser(req, res, next) {
 }
 
 // Global store for verification codes with timestamps (for demo purposes, you can use a real database)
-const verificationCodes = {};
-const nodemailer = require('nodemailer');
+
 
 async function sendVerificationEmail(email, code) {
   try {
