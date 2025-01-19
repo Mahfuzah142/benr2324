@@ -1,121 +1,105 @@
-// Import necessary modules
-const express = require('express'); // Import Express framework
-const app = express(); // Create an Express application
-const port = process.env.PORT || 5500; // Set the port to 5500 or environment variable
-const bcrypt = require('bcrypt'); // Import bcrypt for password hashing
-const jwt = require('jsonwebtoken'); // Import JSON Web Token for authentication
-const path = require('path'); // Import path module for working with file and directory paths
-const cors = require('cors'); // Import CORS for cross-origin resource sharing
-const { MongoClient, ObjectId, ServerApiVersion } = require('mongodb'); // Import MongoDB client and necessary classes
-require('dotenv').config(); // Import dotenv for environment variables
+const express = require('express'); 
+const app = express(); 
+const port = process.env.PORT || 5500; 
+const bcrypt = require('bcrypt'); 
+const jwt = require('jsonwebtoken'); 
+const path = require('path'); 
+const cors = require('cors'); 
+const { MongoClient, ObjectId, ServerApiVersion } = require('mongodb'); 
+require('dotenv').config(); 
+const uuid = require('uuid');
 const nodemailer = require('nodemailer');
 const moment = require('moment');
-const otpCodes = {}; // For storing OTPs temporarily (in-memory)
+const verificationCodes = {}; 
 
-// MongoDB connection URI
-const uri = process.env.MONGODB_URI; // MongoDB URI for connection
+const uri = process.env.MONGODB_URI; 
 
-// MongoDB client setup
 const client = new MongoClient(uri, {
   serverApi: {
-    version: ServerApiVersion.v1, // Specify server API version
-    strict: true, // Enable strict mode for MongoDB
-    deprecationErrors: true, // Enable deprecation errors for MongoDB
+    version: ServerApiVersion.v1, 
+    strict: true, 
+    deprecationErrors: true, 
   }
 });
 
-// Function to connect to MongoDB
 async function run() {
   try {
-    // Attempt to connect to MongoDB
     await client.connect();
-    console.log('Connected successfully to MongoDB'); // Log success message
+    console.log('Connected successfully to MongoDB');
   } catch (err) {
-    // Log connection errors
     console.error('Failed to connect to MongoDB', err);
   }
 }
 
-// Execute the connection function
-run().catch(console.dir); // Catch and log any errors
+run().catch(console.dir); 
 
-// Middleware setup
-app.use(cors()); // Enable CORS for cross-origin requests
-app.use(express.json()); // Parse JSON bodies in incoming requests
-app.use(express.static(path.join(__dirname, 'public'))); // Serve static files from the 'public' directory
+app.use(cors()); 
+app.use(express.json()); 
+app.use(express.static(path.join(__dirname, 'public'))); 
 
-// Function to verify JWT token
 function verifyToken(req, res, next) {
-  const authHeader = req.headers.authorization; // Get authorization header from the request
-  const token = authHeader && authHeader.split(' ')[1]; // Extract token from header
+  const authHeader = req.headers.authorization; 
+  const token = authHeader && authHeader.split(' ')[1]; 
 
-  if (token == null) return res.sendStatus(401); // If no token, return 401 Unauthorized
+  if (token == null) return res.sendStatus(401); 
 
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) return res.sendStatus(403); // If token is invalid, return 403 Forbidden
-    req.tokenData = decoded; // Attach decoded token data to request
-    next(); // Proceed to next middleware
+    if (err) return res.sendStatus(403); 
+    req.tokenData = decoded; 
+    next(); 
   });
 }
 
-// Middleware to verify if the user exists in either player or admin collection
 async function verifyUser(req, res, next) {
-  const { username } = req.body; // Get username from request body
+  const { username } = req.body; 
 
-  // Check if user exists in player collection
   let user = await client.db("Database_Assignment").collection("player").findOne({ username });
 
-  // If not found in player collection, check admin collection
   if (!user) {
     user = await client.db("Database_Assignment").collection("admin").findOne({ username });
 
     if (!user) {
-      return res.status(404).json({ error: 'Username not found' }); // If user not found in either collection, return 404
+      return res.status(404).json({ error: 'Username not found' });
     }
   }
 
-  req.user = user; // Attach user to the request object
-  next(); // Proceed to next middleware or route handler
+  req.user = user; 
+  next(); 
 }
 
-// Function to send OTP email
-async function sendOtpEmail(email, otp) {
+async function sendVerificationEmail(email, code) {
   try {
     const transporter = nodemailer.createTransport({
-      service: 'Gmail', // or your email provider
+      service: 'Gmail', 
       auth: {
-        user: process.env.EMAIL_USER, // Your email
-        pass: process.env.EMAIL_PASSWORD, // Your email password
+        user: process.env.EMAIL_USER, 
+        pass: process.env.EMAIL_PASSWORD, 
       },
     });
 
     await transporter.sendMail({
       from: '"Bouncey Boo" <your-email@example.com>',
       to: email,
-      subject: 'Your OTP',
-      text: `Your OTP is: ${otp}`,
+      subject: 'Your Verification Code',
+      text: `Your verification code is: ${code}`,
     });
 
-    console.log('OTP email sent successfully.');
+    console.log('Verification email sent successfully.');
   } catch (error) {
-    console.error('Error sending OTP email:', error);
+    console.error('Error sending verification email:', error);
     throw new Error('Email sending failed.');
   }
 }
 
-// Register endpoint
 app.post('/register', async (req, res) => {
   try {
-    // Check if username already exists in player collection
     let existingPlayer = await client.db("Database_Assignment").collection("player").findOne({ username: req.body.username });
-    // Check if username already exists in admin collection
     let existingAdmin = await client.db("Database_Assignment").collection("admin").findOne({ username: req.body.username });
 
     if (existingPlayer || existingAdmin) {
       return res.status(400).json({ error: "Username already exists" });
     }
 
-    // Password validation regex
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/;
     const password = req.body.password;
 
@@ -123,7 +107,7 @@ app.post('/register', async (req, res) => {
       return res.status(400).send('Password does not meet strength requirements');
     }
 
-    const hash = bcrypt.hashSync(password, 10);
+    const hash = bcrypt.hashSync(password, 10); 
     const role = password === process.env.ADMIN_PASSWORD ? 'admin' : 'player';
 
     let result = await client.db("Database_Assignment").collection(role).insertOne({
@@ -140,17 +124,21 @@ app.post('/register', async (req, res) => {
       res.status(201).json({ message: 'Player registration successful', result });
     }
   } catch (err) {
+    console.error('Error during registration:', err);
     res.status(500).json({ error: 'Registration failed' });
   }
 });
 
-// Login endpoint
 app.post('/login', async (req, res) => {
   try {
-    let user = await client.db("Database_Assignment").collection("player").findOne({ username: req.body.username });
+    let user = await client.db("Database_Assignment").collection("player").findOne({
+      username: req.body.username
+    });
 
     if (!user) {
-      user = await client.db("Database_Assignment").collection("admin").findOne({ username: req.body.username });
+      user = await client.db("Database_Assignment").collection("admin").findOne({
+        username: req.body.username
+      });
 
       if (!user) {
         return res.status(404).json({ error: "Username not found" });
@@ -160,61 +148,81 @@ app.post('/login', async (req, res) => {
     if (bcrypt.compareSync(req.body.password, user.password)) {
       const token = jwt.sign(
         { username: user.username, role: user.role },
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' }
+        process.env.JWT_SECRET, 
+        { expiresIn: '1h' } 
       );
-
-      res.json({ message: "Login successful", token: token, role: user.role });
+      
+      res.json({
+        message: "Login successful",
+        token: token,
+        role: user.role
+      });
     } else {
       res.status(401).json({ error: "Wrong password" });
     }
   } catch (err) {
+    console.error('Error during login:', err);
     res.status(500).json({ error: 'Login failed' });
   }
 });
 
-// /updateUser endpoint
 app.patch('/updateUser', verifyToken, async (req, res) => {
   try {
     const { username } = req.body;
-    if (!username) return res.status(400).json({ error: 'Invalid request body: username is required' });
 
-    const user = await client.db('Database_Assignment').collection(player).findOne({ username });
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!username) {
+      return res.status(400).json({ error: 'Invalid request body: username is required' });
+    }
 
-    const otp = Math.floor(100000 + Math.random() * 900000);
-    otpCodes[user.email] = { otp, createdAt: moment() };
+    const user = await client.db('Database_Assignment').collection(req.user.role).findOne({ username });
 
-    await sendOtpEmail(user.email, otp);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
-    res.json({ message: 'OTP sent to email. Please use the OTP to complete the update process.' });
+    const verificationCode = Math.floor(100000 + Math.random() * 900000);
+
+    verificationCodes[user.email] = {
+      code: verificationCode,
+      createdAt: moment(),
+    };
+
+    await sendVerificationEmail(user.email, verificationCode);
+
+    res.json({ message: 'Verification code sent to email. Please use the code to complete the update process.' });
   } catch (err) {
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error during updateUser request:', err.stack);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 
-// /verifyOtp endpoint to verify OTP and update user information
-app.patch('/verifyOtp', verifyToken, async (req, res) => {
+app.patch('/verifyCode', verifyToken, async (req, res) => {
   try {
-    const { username, otpEntered, updatedInfo } = req.body;
+    const { username, verificationCodeEntered, updatedInfo } = req.body;
 
-    if (!username || !otpEntered || !updatedInfo) {
+    if (!username || !verificationCodeEntered || !updatedInfo) {
       return res.status(400).json({ error: 'Invalid request body' });
     }
 
     const user = await client.db('Database_Assignment').collection(req.user.role).findOne({ username });
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    const storedData = otpCodes[user.email];
-    if (!storedData) return res.status(400).json({ error: 'No OTP found for this email' });
-
-    const otpAge = moment().diff(storedData.createdAt, 'minutes');
-    if (otpAge > 2) {
-      delete otpCodes[user.email];
-      return res.status(400).json({ error: 'OTP has expired' });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    if (storedData.otp !== otpEntered) return res.status(400).json({ error: 'Invalid OTP' });
+    const storedData = verificationCodes[user.email];
+    if (!storedData) {
+      return res.status(400).json({ error: 'No verification code found for this email' });
+    }
+
+    const codeAge = moment().diff(storedData.createdAt, 'minutes');
+    if (codeAge > 2) {
+      delete verificationCodes[user.email];
+      return res.status(400).json({ error: 'Verification code has expired' });
+    }
+
+    if (storedData.code !== verificationCodeEntered) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
 
     if (updatedInfo.password) {
       updatedInfo.password = bcrypt.hashSync(updatedInfo.password, 10);
@@ -228,14 +236,19 @@ app.patch('/verifyOtp', verifyToken, async (req, res) => {
     );
 
     if (updateResult.modifiedCount === 1) {
-      delete otpCodes[user.email];
+      delete verificationCodes[user.email];
       res.json({ message: 'User information updated successfully' });
     } else {
       res.status(500).json({ error: 'Failed to update user information' });
     }
   } catch (err) {
+    console.error('Error during user update verification:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
 });
 
 
