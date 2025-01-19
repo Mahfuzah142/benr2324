@@ -8,6 +8,9 @@ const path = require('path'); // Import path module for working with file and di
 const cors = require('cors'); // Import CORS for cross-origin resource sharing
 const { MongoClient, ObjectId, ServerApiVersion } = require('mongodb'); // Import MongoDB client and necessary classes
 require('dotenv').config(); // Import dotenv for environment variables
+const uuid = require('uuid');
+const nodemailer = require('nodemailer');
+const moment = require('moment');
 
 // MongoDB connection URI
 const uri = process.env.MONGODB_URI; // MongoDB URI for connection
@@ -76,7 +79,75 @@ async function verifyUser(req, res, next) {
   next(); // Proceed to next middleware or route handler
 }
 
-// Register endpoint
+// Global store for verification codes with timestamps (for demo purposes, you can use a real database)
+let verificationCodes = {};
+
+// Set up nodemailer transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail', // or any other service like SendGrid, SMTP, etc.
+  auth: {
+    user: process.env.EMAIL, // your email
+    pass: process.env.EMAIL_PASSWORD // your email password
+  }
+});
+
+// Helper function to send verification code via email
+const sendVerificationEmail = (email, code) => {
+  const mailOptions = {
+    from: process.env.EMAIL,
+    to: email,
+    subject: 'Your Verification Code',
+    text: `Your verification code is ${code}. It will expire in 2 minutes.`
+  };
+
+  transporter.sendMail(mailOptions, (error, info) => {
+    if (error) {
+      console.log('Error sending email:', error);
+    } else {
+      console.log('Verification email sent:', info.response);
+    }
+  });
+};
+
+// Update user endpoint (Request verification code)
+app.patch('/updateUser', verifyToken, verifyUser, async (req, res) => {
+  try {
+    const { currentUsername, updatedInfo } = req.body; // Get current username and updated info from request body
+
+    // Generate a unique verification code (6 digits for simplicity)
+    const verificationCode = Math.floor(100000 + Math.random() * 900000);
+
+    // Retrieve user's email (assume the email is stored in user info)
+    const user = await client.db('Database_Assignment').collection(req.user.role).findOne({ username: currentUsername });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Send verification code to user's email
+    sendVerificationEmail(user.email, verificationCode);
+
+    // Store the verification code temporarily in memory with expiration time (2 minutes validity)
+    verificationCodes[user.email] = {
+      code: verificationCode,
+      createdAt: moment()
+    };
+
+    // Hash new password if provided in the update info
+    if (updatedInfo.password) {
+      updatedInfo.password = bcrypt.hashSync(updatedInfo.password, 10);
+    }
+
+    // Ensure role is not changed during update
+    updatedInfo.role = req.user.role;
+
+    // Respond with a success message that the code was sent
+    res.json({ message: 'Verification code sent to email. Please enter the code to continue updating.' });
+  } catch (err) {
+    console.error('Error during user update request:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Register endpoint
 app.post('/register', async (req, res) => {
   try {
@@ -169,69 +240,60 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Update user endpoint
-app.patch('/updateUser', verifyToken, verifyUser, async (req, res) => {
+// Verify code and update user information endpoint
+app.patch('/verifyCode', verifyToken, async (req, res) => {
   try {
-    const { currentUsername, updatedInfo } = req.body; // Get current username and updated info from request body
+    const { username, verificationCodeEntered, updatedInfo } = req.body; // Get entered code and updated info
 
-    // Hash new password if provided in the update info
+    // Retrieve user from database
+    const user = await client.db('Database_Assignment').collection(req.user.role).findOne({ username });
+    if (!user) {
+      return res.status(400).json({ error: 'User not found' });
+    }
+
+    // Retrieve the stored verification code for the user's email
+    const storedData = verificationCodes[user.email];
+    if (!storedData) {
+      return res.status(400).json({ error: 'No verification code found for this email' });
+    }
+
+    // Check if the verification code has expired (valid for 2 minutes)
+    const codeAge = moment().diff(storedData.createdAt, 'minutes');
+    if (codeAge > 2) {
+      delete verificationCodes[user.email]; // Remove expired code
+      return res.status(400).json({ error: 'Verification code has expired' });
+    }
+
+    // Check if the entered code matches the stored code
+    if (storedData.code !== verificationCodeEntered) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    // If the code is valid, proceed to update the user information
     if (updatedInfo.password) {
+      // Hash the new password if provided
       updatedInfo.password = bcrypt.hashSync(updatedInfo.password, 10);
     }
 
     // Ensure role is not changed during update
     updatedInfo.role = req.user.role;
 
-    console.log(`Updating user: ${currentUsername}`, updatedInfo); // Log user update info
-
     // Update user information in the database
     const updateResult = await client.db('Database_Assignment').collection(req.user.role).updateOne(
-      { username: currentUsername },
+      { username: user.username },
       { $set: updatedInfo }
     );
 
     if (updateResult.modifiedCount === 1) {
-      res.json({ message: 'User information updated successfully' }); // Send success response if update is successful
+      // Once the update is successful, delete the stored verification code
+      delete verificationCodes[user.email];
+      res.json({ message: 'User information updated successfully' });
     } else {
-      console.error(`Failed to update user information for ${currentUsername}`); // Log failure to update
-      res.status(500).json({ error: 'Failed to update user information' }); // Send error response for update failure
+      res.status(500).json({ error: 'Failed to update user information' });
     }
   } catch (err) {
-    console.error('Error during user update:', err); // Log any errors during user update
-    res.status(500).json({ error: 'Internal server error' }); // Send error response
-  }
-});
-
-// Request delete token endpoint
-app.post('/requestDeleteToken', async (req, res) => {
-  const { passkey, username } = req.body; // Get passkey and username from request body
-
-  try {
-    // Check if the username exists in the player collection
-    const playerUser = await client.db("Database_Assignment").collection("player").findOne({ username });
-
-    if (playerUser) {
-      return res.status(403).json({ error: "Not authorized" }); // If user is a player, return 403
-    }
-
-    // Check if the username exists in the admin collection
-    const adminUser = await client.db("Database_Assignment").collection("admin").findOne({ username });
-
-    if (!adminUser) {
-      return res.status(404).json({ error: "Admin username not found" }); // If admin not found, return 404
-    }
-
-    // Check if the passkey is correct
-    if (passkey === process.env.JWT_SECRET) {
-      const token = jwt.sign({ role: "admin", username }, process.env.JWT_SECRET, { expiresIn: "1h" }); // Generate JWT token
-      console.log("Generated token:", token); // Log the generated token
-      res.json({ token }); // Send the token as response
-    } else {
-      res.status(403).json({ error: "Invalid passkey" }); // Send error response for invalid passkey
-    }
-  } catch (err) {
-    console.error('Error during token request:', err); // Log any errors during token request
-    res.status(500).json({ error: 'Internal server error' }); // Send error response
+    console.error('Error during user update verification:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
