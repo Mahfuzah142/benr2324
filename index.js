@@ -216,37 +216,53 @@ app.post('/login', async (req, res) => {
 
 
 
-// Update user endpoint (Request verification code)
 app.patch('/updateUser', verifyToken, async (req, res) => {
   try {
-    const { username, updatedInfo } = req.body; // Extract username and updated info from request body
+    const { username, updatedInfo } = req.body;
 
-    // Find user in the appropriate collection (based on role)
-    const user = await client.db('Database_Assignment').collection(req.user.role).findOne({ username });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' }); // Return error if user is not found
+    // Validate request body
+    if (!username || !updatedInfo) {
+      return res.status(400).json({ error: 'Invalid request body' });
     }
 
-    // Generate a unique verification code (6 digits for simplicity)
-    const verificationCode = Math.floor(100000 + Math.random() * 900000);
+    console.log('User role from token:', req.user.role);
+    console.log('Request body:', req.body);
 
-    // Store the verification code temporarily in memory with expiration time (2 minutes validity)
-    verificationCodes[user.email] = {
-      code: verificationCode,
-      createdAt: moment(),
-    };
+    // Find user in the appropriate collection
+    const user = await client.db('Database_Assignment').collection(req.user.role).findOne({ username });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
-    // Send the verification code to the user's email
-    sendVerificationEmail(user.email, verificationCode);
+    console.log('User found in database:', user);
 
-    res.json({
-      message: 'Verification code sent to email. Please enter the code to complete the update process.',
-    });
+    // If updating password, hash it
+    if (updatedInfo.password) {
+      updatedInfo.password = bcrypt.hashSync(updatedInfo.password, 10);
+    }
+
+    // Ensure role is not updated
+    delete updatedInfo.role;
+
+    // Update user information in the database
+    const updateResult = await client.db('Database_Assignment').collection(req.user.role).updateOne(
+      { username },
+      { $set: updatedInfo }
+    );
+
+    console.log('Update result:', updateResult);
+
+    if (updateResult.modifiedCount === 1) {
+      res.json({ message: 'User information updated successfully' });
+    } else {
+      res.status(500).json({ error: 'Failed to update user information' });
+    }
   } catch (err) {
-    console.error('Error during updateUser request:', err);
+    console.error('Error during updateUser:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 
 // Verify code and update user information endpoint
