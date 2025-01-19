@@ -179,7 +179,7 @@ app.patch('/updateUser', verifyToken, async (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Invalid request body: username is required' });
 
-    const user = await client.db('Database_Assignment').collection(req.user.role).findOne({ username });
+    const user = await client.db('Database_Assignment').collection(player).findOne({ username });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const otp = Math.floor(100000 + Math.random() * 900000);
