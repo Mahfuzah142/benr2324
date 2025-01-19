@@ -164,7 +164,7 @@ app.post('/register', async (req, res) => {
 // Login endpoint
 app.post('/login', async (req, res) => {
   try {
-    console.log('Login attempt for username:', req.body.username); // Log login attempt
+    console.log('Login attempt for username:', req.body.username);
 
     // Check if user exists in player collection
     let user = await client.db("Database_Assignment").collection("player").findOne({
@@ -181,38 +181,39 @@ app.post('/login', async (req, res) => {
 
       if (!user) {
         console.log('Username not found in admin collection');
-        return res.status(404).json({ error: "Username not found" }); // If user not found in admin collection, return 404
+        return res.status(404).json({ error: "Username not found" });
       }
     }
 
-    console.log('User found:', user); // Log user found
+    console.log('User found:', user);
 
     // Check password
     if (bcrypt.compareSync(req.body.password, user.password)) {
-      console.log('Password match'); // Log password match
+      console.log('Password match');
       
       // Create JWT token
       const token = jwt.sign(
-        { username: user.username, role: user.role }, // Payload
+        { username: user.username, role: user.role },
         process.env.JWT_SECRET, // Secret key from environment variables
         { expiresIn: '1h' } // Token expiry time
       );
       
-      // Send token in response
+      // Send token and role in response
       res.json({
         message: "Login successful",
-        token: token,  // Send the token to the user
-        role: user.role // Send the role as well
+        token: token,
+        role: user.role
       });
     } else {
-      console.log('Password mismatch'); // Log password mismatch
-      res.status(401).json({ error: "Wrong password" }); // Send error response for wrong password
+      console.log('Password mismatch');
+      res.status(401).json({ error: "Wrong password" });
     }
   } catch (err) {
-    console.error('Error during login:', err); // Log any errors during login
-    res.status(500).json({ error: 'Login failed' }); // Send error response
+    console.error('Error during login:', err);
+    res.status(500).json({ error: 'Login failed' });
   }
 });
+
 
 
 // Update user endpoint (Request verification code)
@@ -224,7 +225,7 @@ app.patch('/updateUser', verifyToken, verifyUser, async (req, res) => {
     const verificationCode = Math.floor(100000 + Math.random() * 900000);
 
     // Retrieve user's email (assume the email is stored in user info)
-    const user = await client.db('Database_Assignment').collection(req.user.role).findOne({ username: currentUsername });
+    const user = await client.db('Database_Assignment').collection(req.user.role).findOne({ username: req.body.username });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -253,6 +254,7 @@ app.patch('/updateUser', verifyToken, verifyUser, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 // Verify code and update user information endpoint
 app.patch('/verifyCode', verifyToken, async (req, res) => {
