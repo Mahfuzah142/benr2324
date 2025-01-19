@@ -80,34 +80,32 @@ async function verifyUser(req, res, next) {
 }
 
 // Global store for verification codes with timestamps (for demo purposes, you can use a real database)
-let verificationCodes = {};
+const verificationCodes = {};
+const nodemailer = require('nodemailer');
 
-// Set up nodemailer transporter
-const transporter = nodemailer.createTransport({
-  service: 'gmail', // or any other service like SendGrid, SMTP, etc.
-  auth: {
-    user: process.env.EMAIL, // your email
-    pass: process.env.EMAIL_PASSWORD // your email password
+async function sendVerificationEmail(email, code) {
+  try {
+    const transporter = nodemailer.createTransport({
+      service: 'Gmail', // or your email provider
+      auth: {
+        user: process.env.EMAIL_USER, // Your email
+        pass: process.env.EMAIL_PASSWORD, // Your email password
+      },
+    });
+
+    await transporter.sendMail({
+      from: '"Bouncey Boo" <your-email@example.com>',
+      to: email,
+      subject: 'Your Verification Code',
+      text: `Your verification code is: ${code}`,
+    });
+
+    console.log('Verification email sent successfully.');
+  } catch (error) {
+    console.error('Error sending verification email:', error);
+    throw new Error('Email sending failed.');
   }
-});
-
-// Helper function to send verification code via email
-const sendVerificationEmail = (email, code) => {
-  const mailOptions = {
-    from: process.env.EMAIL,
-    to: email,
-    subject: 'Your Verification Code',
-    text: `Your verification code is ${code}. It will expire in 2 minutes.`
-  };
-
-  transporter.sendMail(mailOptions, (error, info) => {
-    if (error) {
-      console.log('Error sending email:', error);
-    } else {
-      console.log('Verification email sent:', info.response);
-    }
-  });
-};
+}
 
 
 // Register endpoint
