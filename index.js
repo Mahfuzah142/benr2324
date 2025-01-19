@@ -90,17 +90,20 @@ app.post('/register', async (req, res) => {
       return res.status(400).json({ error: "Username already exists" });
     }
 
-    // Determine role based on password provided and hash password
-    const role = req.body.password === process.env.ADMIN_PASSWORD ? 'admin' : 'player';
+    // Password validation regex
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/;
+    const password = req.body.password;
+
+    // Check if password meets strength requirements
     if (!passwordRegex.test(password)) {
-    return res.status(400).send('Password does not meet strength requirements');
-    }
-    else{
-      const hash = bcrypt.hashSync(req.body.password, 10); // Hash the password with bcrypt
+      return res.status(400).send('Password does not meet strength requirements');
     }
 
-    const hash = bcrypt.hashSync(req.body.password, 10); // Hash the password with bcrypt
+    // Hash the password with bcrypt
+    const hash = bcrypt.hashSync(password, 10); 
+
+    // Determine role based on password provided
+    const role = password === process.env.ADMIN_PASSWORD ? 'admin' : 'player';
 
     // Insert new user into the appropriate collection based on role
     let result = await client.db("Database_Assignment").collection(role).insertOne({
