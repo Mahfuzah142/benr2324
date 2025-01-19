@@ -8,10 +8,9 @@ const path = require('path'); // Import path module for working with file and di
 const cors = require('cors'); // Import CORS for cross-origin resource sharing
 const { MongoClient, ObjectId, ServerApiVersion } = require('mongodb'); // Import MongoDB client and necessary classes
 require('dotenv').config(); // Import dotenv for environment variables
-const uuid = require('uuid');
 const nodemailer = require('nodemailer');
 const moment = require('moment');
-const verificationCodes = {};
+const otpCodes = {}; // For storing OTPs temporarily (in-memory)
 
 // MongoDB connection URI
 const uri = process.env.MONGODB_URI; // MongoDB URI for connection
@@ -45,7 +44,6 @@ app.use(cors()); // Enable CORS for cross-origin requests
 app.use(express.json()); // Parse JSON bodies in incoming requests
 app.use(express.static(path.join(__dirname, 'public'))); // Serve static files from the 'public' directory
 
-////
 // Function to verify JWT token
 function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization; // Get authorization header from the request
@@ -80,10 +78,8 @@ async function verifyUser(req, res, next) {
   next(); // Proceed to next middleware or route handler
 }
 
-// Global store for verification codes with timestamps (for demo purposes, you can use a real database)
-
-
-async function sendVerificationEmail(email, code) {
+// Function to send OTP email
+async function sendOtpEmail(email, otp) {
   try {
     const transporter = nodemailer.createTransport({
       service: 'Gmail', // or your email provider
@@ -96,17 +92,16 @@ async function sendVerificationEmail(email, code) {
     await transporter.sendMail({
       from: '"Bouncey Boo" <your-email@example.com>',
       to: email,
-      subject: 'Your Verification Code',
-      text: `Your verification code is: ${code}`,
+      subject: 'Your OTP',
+      text: `Your OTP is: ${otp}`,
     });
 
-    console.log('Verification email sent successfully.');
+    console.log('OTP email sent successfully.');
   } catch (error) {
-    console.error('Error sending verification email:', error);
+    console.error('Error sending OTP email:', error);
     throw new Error('Email sending failed.');
   }
 }
-
 
 // Register endpoint
 app.post('/register', async (req, res) => {
@@ -117,7 +112,6 @@ app.post('/register', async (req, res) => {
     let existingAdmin = await client.db("Database_Assignment").collection("admin").findOne({ username: req.body.username });
 
     if (existingPlayer || existingAdmin) {
-      // If username exists in either collection, return 400 status
       return res.status(400).json({ error: "Username already exists" });
     }
 
@@ -125,18 +119,13 @@ app.post('/register', async (req, res) => {
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/;
     const password = req.body.password;
 
-    // Check if password meets strength requirements
     if (!passwordRegex.test(password)) {
       return res.status(400).send('Password does not meet strength requirements');
     }
 
-    // Hash the password with bcrypt
-    const hash = bcrypt.hashSync(password, 10); 
-
-    // Determine role based on password provided
+    const hash = bcrypt.hashSync(password, 10);
     const role = password === process.env.ADMIN_PASSWORD ? 'admin' : 'player';
 
-    // Insert new user into the appropriate collection based on role
     let result = await client.db("Database_Assignment").collection(role).insertOne({
       username: req.body.username,
       password: hash,
@@ -145,177 +134,110 @@ app.post('/register', async (req, res) => {
       role: role
     });
 
-    // Respond based on role
     if (role === 'admin') {
-      console.log('Admin registration successful:', result); // Log admin registration success
-      res.status(201).json({ message: 'Admin registration successful', result }); // Send success response for admin
+      res.status(201).json({ message: 'Admin registration successful', result });
     } else if (role === 'player') {
-      console.log('Player registration successful:', result); // Log player registration success
-      res.status(201).json({ message: 'Player registration successful', result }); // Send success response for player
+      res.status(201).json({ message: 'Player registration successful', result });
     }
   } catch (err) {
-    console.error('Error during registration:', err); // Log any errors during registration
-    res.status(500).json({ error: 'Registration failed' }); // Send error response
+    res.status(500).json({ error: 'Registration failed' });
   }
 });
 
 // Login endpoint
 app.post('/login', async (req, res) => {
   try {
-    console.log('Login attempt for username:', req.body.username);
+    let user = await client.db("Database_Assignment").collection("player").findOne({ username: req.body.username });
 
-    // Check if user exists in player collection
-    let user = await client.db("Database_Assignment").collection("player").findOne({
-      username: req.body.username
-    });
-
-    // If not found in player collection, check admin collection
     if (!user) {
-      console.log('Username not found in player collection, checking admin collection');
-
-      user = await client.db("Database_Assignment").collection("admin").findOne({
-        username: req.body.username
-      });
+      user = await client.db("Database_Assignment").collection("admin").findOne({ username: req.body.username });
 
       if (!user) {
-        console.log('Username not found in admin collection');
         return res.status(404).json({ error: "Username not found" });
       }
     }
 
-    console.log('User found:', user);
-
-    // Check password
     if (bcrypt.compareSync(req.body.password, user.password)) {
-      console.log('Password match');
-      
-      // Create JWT token
       const token = jwt.sign(
         { username: user.username, role: user.role },
-        process.env.JWT_SECRET, // Secret key from environment variables
-        { expiresIn: '1h' } // Token expiry time
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
       );
-      
-      // Send token and role in response
-      res.json({
-        message: "Login successful",
-        token: token,
-        role: user.role
-      });
+
+      res.json({ message: "Login successful", token: token, role: user.role });
     } else {
-      console.log('Password mismatch');
       res.status(401).json({ error: "Wrong password" });
     }
   } catch (err) {
-    console.error('Error during login:', err);
     res.status(500).json({ error: 'Login failed' });
   }
 });
 
-
-
-// Updated /updateUser endpoint
+// /updateUser endpoint
 app.patch('/updateUser', verifyToken, async (req, res) => {
   try {
     const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Invalid request body: username is required' });
 
-    // Check for missing username
-    if (!username) {
-      console.log('Username is missing in request body.');
-      return res.status(400).json({ error: 'Invalid request body: username is required' });
-    }
-
-    // Find user in the appropriate collection
-    console.log(`Looking for user: ${username} in collection: ${req.user.role}`);
     const user = await client.db('Database_Assignment').collection(req.user.role).findOne({ username });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Handle user not found
-    if (!user) {
-      console.log(`User not found: ${username}`);
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const otp = Math.floor(100000 + Math.random() * 900000);
+    otpCodes[user.email] = { otp, createdAt: moment() };
 
-    // Generate a verification code
-    const verificationCode = Math.floor(100000 + Math.random() * 900000);
-    console.log(`Generated verification code for user ${username}: ${verificationCode}`);
+    await sendOtpEmail(user.email, otp);
 
-    // Store the verification code with a 2-minute expiry
-    verificationCodes[user.email] = {
-      code: verificationCode,
-      createdAt: moment(),
-    };
-
-    // Send the verification code to the user's email
-    console.log(`Sending verification code to email: ${user.email}`);
-    await sendVerificationEmail(user.email, verificationCode);
-
-    res.json({ message: 'Verification code sent to email. Please use the code to complete the update process.' });
+    res.json({ message: 'OTP sent to email. Please use the OTP to complete the update process.' });
   } catch (err) {
-    console.error('Error during updateUser request:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.patch('/verifyCode', verifyToken, async (req, res) => {
+// /verifyOtp endpoint to verify OTP and update user information
+app.patch('/verifyOtp', verifyToken, async (req, res) => {
   try {
-    const { username, verificationCodeEntered, updatedInfo } = req.body;
+    const { username, otpEntered, updatedInfo } = req.body;
 
-    // Validate request body
-    if (!username || !verificationCodeEntered || !updatedInfo) {
+    if (!username || !otpEntered || !updatedInfo) {
       return res.status(400).json({ error: 'Invalid request body' });
     }
 
-    // Retrieve user from database
     const user = await client.db('Database_Assignment').collection(req.user.role).findOne({ username });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const storedData = otpCodes[user.email];
+    if (!storedData) return res.status(400).json({ error: 'No OTP found for this email' });
+
+    const otpAge = moment().diff(storedData.createdAt, 'minutes');
+    if (otpAge > 2) {
+      delete otpCodes[user.email];
+      return res.status(400).json({ error: 'OTP has expired' });
     }
 
-    // Retrieve the stored verification code for the user's email
-    const storedData = verificationCodes[user.email];
-    if (!storedData) {
-      return res.status(400).json({ error: 'No verification code found for this email' });
-    }
+    if (storedData.otp !== otpEntered) return res.status(400).json({ error: 'Invalid OTP' });
 
-    // Check if the verification code has expired (valid for 2 minutes)
-    const codeAge = moment().diff(storedData.createdAt, 'minutes');
-    if (codeAge > 2) {
-      delete verificationCodes[user.email]; // Remove expired code
-      return res.status(400).json({ error: 'Verification code has expired' });
-    }
-
-    // Check if the entered code matches the stored code
-    if (storedData.code !== verificationCodeEntered) {
-      return res.status(400).json({ error: 'Invalid verification code' });
-    }
-
-    // If the code is valid, proceed to update the user information
     if (updatedInfo.password) {
-      // Hash the new password if provided
       updatedInfo.password = bcrypt.hashSync(updatedInfo.password, 10);
     }
 
-    // Ensure role is not changed during update
     delete updatedInfo.role;
 
-    // Update user information in the database
     const updateResult = await client.db('Database_Assignment').collection(req.user.role).updateOne(
       { username: user.username },
       { $set: updatedInfo }
     );
 
     if (updateResult.modifiedCount === 1) {
-      // Once the update is successful, delete the stored verification code
-      delete verificationCodes[user.email];
+      delete otpCodes[user.email];
       res.json({ message: 'User information updated successfully' });
     } else {
       res.status(500).json({ error: 'Failed to update user information' });
     }
   } catch (err) {
-    console.error('Error during user update verification:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 
 // Delete user endpoint
