@@ -6,6 +6,9 @@ const bcrypt = require('bcrypt'); // Import bcrypt for password hashing
 const jwt = require('jsonwebtoken'); // Import JSON Web Token for authentication
 const path = require('path'); // Import path module for working with file and directory paths
 const cors = require('cors'); // Import CORS for cross-origin resource sharing
+const loginAttempts = {}; // This will hold the username, failed attempts count and timestamp
+const MAX_FAILED_ATTEMPTS = 3; // Max allowed attempts before lockout
+const LOCKOUT_DURATION = 10 * 60 * 1000; // Lockout duration in milliseconds (10 minutes)
 const { MongoClient, ObjectId, ServerApiVersion } = require('mongodb'); // Import MongoDB client and necessary classes
 require('dotenv').config(); // Import dotenv for environment variables
 // MongoDB connection URI
@@ -121,11 +124,28 @@ app.post('/register', async (req, res) => {
 // Login endpoint
 app.post('/login', async (req, res) => {
   try {
-    console.log('Login attempt for username:', req.body.username); // Log login attempt
+    const username = req.body.username;
+    console.log('Login attempt for username:', username); // Log login attempt
+    
+    // Check if user is currently locked out
+    if (loginAttempts[username] && loginAttempts[username].count >= MAX_FAILED_ATTEMPTS) {
+      const lastAttemptTime = loginAttempts[username].lastAttemptTime;
+      const timeSinceLastAttempt = Date.now() - lastAttemptTime;
+      
+      if (timeSinceLastAttempt < LOCKOUT_DURATION) {
+        const timeLeft = (LOCKOUT_DURATION - timeSinceLastAttempt) / 1000; // in seconds
+        return res.status(403).json({ error: `Account locked. Try again in ${Math.ceil(timeLeft)} seconds.` });
+      } else {
+        // Reset the failed attempts count after lockout duration
+        loginAttempts[username] = { count: 0, lastAttemptTime: null };
+      }
+    }
+
     // Check if user exists in player collection
     let user = await client.db("Database_Assignment").collection("player").findOne({
       username: req.body.username
     });
+
     // If not found in player collection, check admin collection
     if (!user) {
       console.log('Username not found in player collection, checking admin collection');
@@ -138,13 +158,30 @@ app.post('/login', async (req, res) => {
       }
     }
     console.log('User found:', user); // Log user found
+
     // Check password
     if (bcrypt.compareSync(req.body.password, user.password)) {
       console.log('Password match'); // Log password match
       const role = user.role; // Get user role
+      // Reset failed attempts on successful login
+      loginAttempts[username] = { count: 0, lastAttemptTime: null };
       res.json({ message: "Login successful", role }); // Send success response with role
     } else {
       console.log('Password mismatch'); // Log password mismatch
+
+      // Track failed attempts
+      if (!loginAttempts[username]) {
+        loginAttempts[username] = { count: 0, lastAttemptTime: null };
+      }
+
+      loginAttempts[username].count += 1;
+      loginAttempts[username].lastAttemptTime = Date.now();
+
+      if (loginAttempts[username].count >= MAX_FAILED_ATTEMPTS) {
+        console.log('Too many failed attempts, account locked');
+        return res.status(403).json({ error: `Too many failed attempts. Account locked for 10 minutes.` });
+      }
+
       res.status(401).json({ error: "Wrong password" }); // Send error response for wrong password
     }
   } catch (err) {
@@ -152,6 +189,7 @@ app.post('/login', async (req, res) => {
     res.status(500).json({ error: 'Login failed' }); // Send error response
   }
 });
+
 // Update user endpoint
 app.patch('/updateUser', verifyToken, verifyUser, async (req, res) => {
   try {
