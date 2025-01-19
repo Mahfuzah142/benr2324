@@ -240,6 +240,45 @@ app.post('/login', async (req, res) => {
   }
 });
 
+// Update user endpoint (Request verification code)
+app.patch('/updateUser', verifyToken, verifyUser, async (req, res) => {
+  try {
+    const { currentUsername, updatedInfo } = req.body; // Get current username and updated info from request body
+
+    // Generate a unique verification code (6 digits for simplicity)
+    const verificationCode = Math.floor(100000 + Math.random() * 900000);
+
+    // Retrieve user's email (assume the email is stored in user info)
+    const user = await client.db('Database_Assignment').collection(req.user.role).findOne({ username: currentUsername });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Send verification code to user's email
+    sendVerificationEmail(user.email, verificationCode);
+
+    // Store the verification code temporarily in memory with expiration time (2 minutes validity)
+    verificationCodes[user.email] = {
+      code: verificationCode,
+      createdAt: moment()
+    };
+
+    // Hash new password if provided in the update info
+    if (updatedInfo.password) {
+      updatedInfo.password = bcrypt.hashSync(updatedInfo.password, 10);
+    }
+
+    // Ensure role is not changed during update
+    updatedInfo.role = req.user.role;
+
+    // Respond with a success message that the code was sent
+    res.json({ message: 'Verification code sent to email. Please enter the code to continue updating.' });
+  } catch (err) {
+    console.error('Error during user update request:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Verify code and update user information endpoint
 app.patch('/verifyCode', verifyToken, async (req, res) => {
   try {
