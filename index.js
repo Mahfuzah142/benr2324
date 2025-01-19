@@ -215,23 +215,6 @@ app.post('/login', async (req, res) => {
 });
 
 
-    console.log('User found:', user); // Log user found
-
-    // Check password
-    if (bcrypt.compareSync(req.body.password, user.password)) {
-      console.log('Password match'); // Log password match
-      const role = user.role; // Get user role
-      res.json({ message: "Login successful", role }); // Send success response with role
-    } else {
-      console.log('Password mismatch'); // Log password mismatch
-      res.status(401).json({ error: "Wrong password" }); // Send error response for wrong password
-    }
-  } catch (err) {
-    console.error('Error during login:', err); // Log any errors during login
-    res.status(500).json({ error: 'Login failed' }); // Send error response
-  }
-});
-
 // Update user endpoint (Request verification code)
 app.patch('/updateUser', verifyToken, verifyUser, async (req, res) => {
   try {
