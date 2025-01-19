@@ -92,6 +92,14 @@ app.post('/register', async (req, res) => {
 
     // Determine role based on password provided and hash password
     const role = req.body.password === process.env.ADMIN_PASSWORD ? 'admin' : 'player';
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/;
+    if (!passwordRegex.test(password)) {
+    return res.status(400).send('Password does not meet strength requirements');
+    }
+    else{
+      const hash = bcrypt.hashSync(req.body.password, 10); // Hash the password with bcrypt
+    }
+
     const hash = bcrypt.hashSync(req.body.password, 10); // Hash the password with bcrypt
 
     // Insert new user into the appropriate collection based on role
