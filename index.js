@@ -214,45 +214,47 @@ app.post('/login', async (req, res) => {
 
 
 
+// Updated /updateUser endpoint
 app.patch('/updateUser', verifyToken, async (req, res) => {
   try {
-    const { username } = req.body; // Extract username from request body
+    const { username } = req.body;
 
-    // Validate request body
+    // Check for missing username
     if (!username) {
+      console.log('Username is missing in request body.');
       return res.status(400).json({ error: 'Invalid request body: username is required' });
     }
 
-    // Find the user in the appropriate collection (based on role)
+    // Find user in the appropriate collection
+    console.log(`Looking for user: ${username} in collection: ${req.user.role}`);
     const user = await client.db('Database_Assignment').collection(req.user.role).findOne({ username });
+
+    // Handle user not found
     if (!user) {
+      console.log(`User not found: ${username}`);
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Generate a unique verification code (6 digits for simplicity)
+    // Generate a verification code
     const verificationCode = Math.floor(100000 + Math.random() * 900000);
+    console.log(`Generated verification code for user ${username}: ${verificationCode}`);
 
-    // Store the verification code temporarily with expiration time (2 minutes validity)
+    // Store the verification code with a 2-minute expiry
     verificationCodes[user.email] = {
       code: verificationCode,
       createdAt: moment(),
     };
 
-    console.log('Generated verification code:', verificationCode);
-
     // Send the verification code to the user's email
-    sendVerificationEmail(user.email, verificationCode);
+    console.log(`Sending verification code to email: ${user.email}`);
+    await sendVerificationEmail(user.email, verificationCode);
 
-    res.json({
-      message: 'Verification code sent to email. Please use the code to complete the update process.',
-    });
+    res.json({ message: 'Verification code sent to email. Please use the code to complete the update process.' });
   } catch (err) {
     console.error('Error during updateUser request:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-
 
 app.patch('/verifyCode', verifyToken, async (req, res) => {
   try {
