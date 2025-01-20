@@ -9,6 +9,7 @@ const cors = require('cors'); // Import CORS for cross-origin resource sharing
 const loginAttempts = {}; // This will hold the username, failed attempts count and timestamp
 const MAX_FAILED_ATTEMPTS = 3; // Max allowed attempts before lockout
 const LOCKOUT_DURATION = 10 * 60 * 1000; // Lockout duration in milliseconds (10 minutes)
+const nodemailer = require('nodemailer');
 const { MongoClient, ObjectId, ServerApiVersion } = require('mongodb'); // Import MongoDB client and necessary classes
 require('dotenv').config(); // Import dotenv for environment variables
 // MongoDB connection URI
