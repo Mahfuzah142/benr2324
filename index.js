@@ -33,6 +33,23 @@ async function run() {
     console.error('Failed to connect to MongoDB', err);
   }
 }
+
+// Middleware to differentiate admin and player access
+app.use((req, res, next) => {
+  const hostname = req.hostname; // Extract hostname from request
+
+   if (hostname === '127.0.0.1' || hostname === 'localhost') {
+    // Allow admin access on local host
+    if (!req.path.startsWith('/admin')) {
+      return res.redirect('/admin');
+    }
+  } else {
+    // Reject access from unintended hosts
+    return res.status(404).send('Host not authorized');
+  }
+
+  next();
+});
 // Execute the connection function
 run().catch(console.dir); // Catch and log any errors
 // Middleware setup
@@ -104,9 +121,9 @@ app.post('/register', async (req, res) => {
     // Check if username already exists in player collection
     let existingPlayer = await client.db("Database_Assignment").collection("player").findOne({ username: req.body.username });
     // Check if username already exists in admin collection
-    let existingAdmin = await client.db("Database_Assignment").collection("admin").findOne({ username: req.body.username });
+    //let existingAdmin = await client.db("Database_Assignment").collection("admin").findOne({ username: req.body.username });
 
-    if (existingPlayer || existingAdmin) {
+    if (existingPlayer) {
       // If username exists in either collection, return 400 status
       return res.status(400).json({ error: "Username already exists" });
     }
@@ -136,10 +153,7 @@ app.post('/register', async (req, res) => {
     });
 
     // Respond based on role
-    if (role === 'admin') {
-      console.log('Admin registration successful:', result); // Log admin registration success
-      res.status(201).json({ message: 'Admin registration successful', result }); // Send success response for admin
-    } else if (role === 'player') {
+    if (role === 'player') {
       console.log('Player registration successful:', result); // Log player registration success
       res.status(201).json({ message: 'Player registration successful', result }); // Send success response for player
     }
@@ -371,6 +385,58 @@ app.delete('/deleteUser/:username', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('Error deleting user account:', err); // Log any errors during user deletion
     res.status(500).json({ error: 'Internal server error' }); // Send error response
+  }
+});
+
+app.post('/admin/register', async (req, res) => {
+  const { username, password, email } = req.body;
+  try {
+    const adminCollection = client.db('Database_Assignment').collection('admin');
+
+    const existingAdmin = await adminCollection.findOne({ username });
+    if (existingAdmin) {
+      return res.status(400).json({ error: 'Admin username already exists' });
+    }
+
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    const result = await adminCollection.insertOne({ username, password: hashedPassword, email });
+
+    res.status(201).json({ message: 'Admin registered successfully', result });
+  } catch (err) {
+    console.error('Error during admin registration:', err);
+    res.status(500).json({ error: 'Failed to register admin' });
+  }
+});
+
+app.delete('/admin/deleteUser/:username', async (req, res) => {
+  const username = req.params.username;
+  try {
+    const playerCollection = client.db('Database_Assignment').collection('player');
+    const adminCollection = client.db('Database_Assignment').collection('admin');
+
+    const playerResult = await playerCollection.deleteOne({ username });
+    const adminResult = await adminCollection.deleteOne({ username });
+
+    if (playerResult.deletedCount === 0 && adminResult.deletedCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ message: 'User deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting user:', err);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+app.delete('/admin/deleteHighScore', async (req, res) => {
+  try {
+    const highScoreCollection = client.db('Database_Assignment').collection('highscore');
+    const result = await highScoreCollection.deleteMany({});
+
+    res.json({ message: 'High scores deleted successfully', deletedCount: result.deletedCount });
+  } catch (err) {
+    console.error('Error deleting high scores:', err);
+    res.status(500).json({ error: 'Failed to delete high scores' });
   }
 });
 // Function to generate level messages
@@ -783,3 +849,4 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`); // Log server start
 });
+
