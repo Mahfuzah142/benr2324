@@ -67,36 +67,35 @@ async function verifyUser(req, res, next) {
 }
 
 
-const nodemailer = require('nodemailer');
+// Global object to store OTPs
+const otps = {};  // { username: { email, code, createdAt, updatedInfo, used } }
 
-// Configure the transporter with Gmail SMTP
+// Email transporter setup (Gmail)
 const transporter = nodemailer.createTransport({
-  service: 'gmail',  // Use Gmail service
+  service: 'gmail',
   auth: {
     user: 'nurmahfuzah142@gmail.com',  // Your Gmail address
-    pass: 'tifj dpow icrk xssk',  // Use the 16-character app password generated
+    pass: 'tifj dpow icrk xssk',       // Use the 16-character app password generated
   }
 });
 
-// Function to send OTP via Gmail
+// Function to send OTP via email
 async function sendOTPEmail(email, otp) {
   try {
     const mailOptions = {
-      from: '"Bouncy Boo" <your-email@gmail.com>',
+      from: '"Bouncy Boo" <nurmahfuzah142@gmail.com>',
       to: email,
       subject: 'Your OTP Code',
       text: `Your OTP code is: ${otp}\nIt is valid for 2 minutes.`,
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log(`OTP email sent: ${info.response}`);
+    console.log(`OTP email sent to ${email}: ${info.response}`);
   } catch (error) {
     console.error('Error sending email:', error);
     throw new Error('Failed to send OTP email');
   }
 }
-
-
 
 // Register endpoint
 app.post('/register', async (req, res) => {
@@ -218,33 +217,30 @@ app.post('/login', async (req, res) => {
   }
 });
 
+// Endpoint: User request password update
 app.post('/updateUser', async (req, res) => {
   try {
     const { username, newPassword } = req.body;
 
     if (!username || !newPassword) {
-      console.error('Invalid request body:', req.body);
       return res.status(400).json({ error: 'Username and new password are required' });
     }
 
     console.log('Received request to update user:', username);
 
-    // Ensure database connection
-    if (!client.isConnected()) {
+    // Ensure database connection is established
+    if (!client.topology || !client.topology.isConnected()) {
       await client.connect();
     }
 
-    // Check if the user exists in the database
+    // Check if the user exists
     const user = await client.db('Database_Assignment').collection('player').findOne({ username });
 
     if (!user) {
-      console.error('User not found:', username);
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Ensure email is available
     if (!user.email) {
-      console.error('Email not found for user:', username);
       return res.status(400).json({ error: 'No email found for this user' });
     }
 
@@ -253,27 +249,28 @@ app.post('/updateUser', async (req, res) => {
     // Generate a 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000);
 
-    // Store OTP with expiration time and new password (hashed)
+    // Store OTP with expiration time (2 minutes) and new password (hashed)
     otps[username] = {
       email: email,
       code: otp,
       createdAt: Date.now(),
-      updatedInfo: { password: bcrypt.hashSync(newPassword, 10) },  // Hash the new password
-      used: false,  // Track if OTP is used
+      updatedInfo: { password: bcrypt.hashSync(newPassword, 10) },
+      used: false,
     };
 
     console.log(`Generated OTP for ${username}: ${otp}`);
 
-    // Send OTP to the user's email
+    // Send the OTP to the user's email
     await sendOTPEmail(email, otp);
 
     res.json({ message: `OTP sent to ${email}. Please verify it to update your password.` });
   } catch (err) {
-    console.error('Error in /updateUser:', err.message, err.stack);
+    console.error('Error in /updateUser:', err.message);
     res.status(500).json({ error: 'Failed to initiate user update', details: err.message });
   }
 });
 
+// Endpoint: Verify OTP and update password
 app.post('/verifyOTP', async (req, res) => {
   try {
     const { username, otp } = req.body;
@@ -282,7 +279,7 @@ app.post('/verifyOTP', async (req, res) => {
       return res.status(400).json({ error: 'Username and OTP are required' });
     }
 
-    // Check if OTP exists for the given username
+    // Check if OTP exists and is valid
     const storedOtp = otps[username];
     if (!storedOtp) {
       return res.status(400).json({ error: 'OTP not found or expired' });
@@ -300,7 +297,7 @@ app.post('/verifyOTP', async (req, res) => {
       return res.status(400).json({ error: 'OTP has already been used' });
     }
 
-    // Check if the entered OTP matches the stored OTP
+    // Validate OTP
     if (parseInt(otp) !== storedOtp.code) {
       return res.status(400).json({ error: 'Invalid OTP' });
     }
@@ -318,10 +315,11 @@ app.post('/verifyOTP', async (req, res) => {
 
     res.json({ message: 'Password updated successfully' });
   } catch (err) {
-    console.error('Error in /verifyOTP:', err);
-    res.status(500).json({ error: 'Failed to verify OTP' });
+    console.error('Error in /verifyOTP:', err.message);
+    res.status(500).json({ error: 'Failed to verify OTP', details: err.message });
   }
 });
+
 
 
 // Request delete token endpoint
