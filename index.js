@@ -43,9 +43,6 @@ app.use((req, res, next) => {
     if (!req.path.startsWith('/admin')) {
       return res.redirect('/admin');
     }
-  } else {
-    // Reject access from unintended hosts
-    return res.status(404).send('Host not authorized');
   }
 
   next();
