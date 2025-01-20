@@ -223,18 +223,32 @@ app.post('/updateUser', async (req, res) => {
     const { username, newPassword } = req.body;
 
     if (!username || !newPassword) {
+      console.error('Invalid request body:', req.body);
       return res.status(400).json({ error: 'Username and new password are required' });
     }
 
-    // Connect to the database
-    await client.connect();
+    console.log('Received request to update user:', username);
+
+    // Ensure database connection
+    if (!client.isConnected()) {
+      await client.connect();
+    }
+
+    // Check if the user exists in the database
     const user = await client.db('Database_Assignment').collection('player').findOne({ username });
 
     if (!user) {
+      console.error('User not found:', username);
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const email = user.email; // Retrieve the user's email from the database
+    // Ensure email is available
+    if (!user.email) {
+      console.error('Email not found for user:', username);
+      return res.status(400).json({ error: 'No email found for this user' });
+    }
+
+    const email = user.email;
 
     // Generate a 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000);
@@ -248,13 +262,15 @@ app.post('/updateUser', async (req, res) => {
       used: false,  // Track if OTP is used
     };
 
-    // Send the OTP to the user's email
+    console.log(`Generated OTP for ${username}: ${otp}`);
+
+    // Send OTP to the user's email
     await sendOTPEmail(email, otp);
 
     res.json({ message: `OTP sent to ${email}. Please verify it to update your password.` });
   } catch (err) {
-    console.error('Error in /updateUser:', err);
-    res.status(500).json({ error: 'Failed to initiate user update' });
+    console.error('Error in /updateUser:', err.message, err.stack);
+    res.status(500).json({ error: 'Failed to initiate user update', details: err.message });
   }
 });
 
