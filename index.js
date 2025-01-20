@@ -34,19 +34,26 @@ async function run() {
   }
 }
 
-// Middleware to differentiate admin and player access
 app.use((req, res, next) => {
   const hostname = req.hostname; // Extract hostname from request
 
-   if (hostname === '127.0.0.1' || hostname === 'localhost') {
-    // Allow admin access on local host
-    if (!req.path.startsWith('/admin')) {
-      return res.redirect('/admin');
+  // Allow admin access only for localhost or 127.0.0.1
+  if (hostname === '127.0.0.1' || hostname === 'localhost') {
+    // Restrict access to '/admin' for localhost
+    if (req.path.startsWith('/admin')) {
+      return next(); // Allow access to admin routes
     }
   }
 
-  next();
+  // Allow access to other APIs for localhost (non-admin routes)
+  if (hostname === '127.0.0.1' || hostname === 'localhost' || hostname === 'benr2423fuzah.azurewebsites.net') {
+    return next(); // Allow access to non-admin routes for both localhost and Azure
+  }
+
+  // Reject access from unintended hosts
+  return res.status(404).send('Host not authorized');
 });
+
 // Execute the connection function
 run().catch(console.dir); // Catch and log any errors
 // Middleware setup
