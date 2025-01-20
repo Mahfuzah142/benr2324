@@ -66,6 +66,38 @@ async function verifyUser(req, res, next) {
   next(); // Proceed to next middleware or route handler
 }
 
+
+const nodemailer = require('nodemailer');
+
+// Configure the transporter with Gmail SMTP
+const transporter = nodemailer.createTransport({
+  service: 'gmail',  // Use Gmail service
+  auth: {
+    user: 'nurmahfuzah142@gmail.com',  // Your Gmail address
+    pass: 'tifj dpow icrk xssk',  // Use the 16-character app password generated
+  }
+});
+
+// Function to send OTP via Gmail
+async function sendOTPEmail(email, otp) {
+  try {
+    const mailOptions = {
+      from: '"Bouncy Boo" <your-email@gmail.com>',
+      to: email,
+      subject: 'Your OTP Code',
+      text: `Your OTP code is: ${otp}\nIt is valid for 2 minutes.`,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`OTP email sent: ${info.response}`);
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw new Error('Failed to send OTP email');
+  }
+}
+
+
+
 // Register endpoint
 app.post('/register', async (req, res) => {
   try {
@@ -186,33 +218,96 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Update user endpoint
-app.patch('/updateUser', verifyToken, verifyUser, async (req, res) => {
+app.post('/updateUser', async (req, res) => {
   try {
-    const { currentUsername, updatedInfo } = req.body; // Get current username and updated info from request body
-    // Hash new password if provided in the update info
-    if (updatedInfo.password) {
-      updatedInfo.password = bcrypt.hashSync(updatedInfo.password, 10);
+    const { username, newPassword } = req.body;
+
+    if (!username || !newPassword) {
+      return res.status(400).json({ error: 'Username and new password are required' });
     }
-    // Ensure role is not changed during update
-    updatedInfo.role = req.user.role;
-    console.log(`Updating user: ${currentUsername}`, updatedInfo); // Log user update info
-    // Update user information in the database
-    const updateResult = await client.db('Database_Assignment').collection(req.user.role).updateOne(
-      { username: currentUsername },
-      { $set: updatedInfo }
-    );
-    if (updateResult.modifiedCount === 1) {
-      res.json({ message: 'User information updated successfully' }); // Send success response if update is successful
-    } else {
-      console.error(`Failed to update user information for ${currentUsername}`); // Log failure to update
-      res.status(500).json({ error: 'Failed to update user information' }); // Send error response for update failure
+
+    // Connect to the database
+    await client.connect();
+    const user = await client.db('Database_Assignment').collection('player').findOne({ username });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
+
+    const email = user.email; // Retrieve the user's email from the database
+
+    // Generate a 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000);
+
+    // Store OTP with expiration time and new password (hashed)
+    otps[username] = {
+      email: email,
+      code: otp,
+      createdAt: Date.now(),
+      updatedInfo: { password: bcrypt.hashSync(newPassword, 10) },  // Hash the new password
+      used: false,  // Track if OTP is used
+    };
+
+    // Send the OTP to the user's email
+    await sendOTPEmail(email, otp);
+
+    res.json({ message: `OTP sent to ${email}. Please verify it to update your password.` });
   } catch (err) {
-    console.error('Error during user update:', err); // Log any errors during user update
-    res.status(500).json({ error: 'Internal server error' }); // Send error response
+    console.error('Error in /updateUser:', err);
+    res.status(500).json({ error: 'Failed to initiate user update' });
   }
 });
+
+app.post('/verifyOTP', async (req, res) => {
+  try {
+    const { username, otp } = req.body;
+
+    if (!username || !otp) {
+      return res.status(400).json({ error: 'Username and OTP are required' });
+    }
+
+    // Check if OTP exists for the given username
+    const storedOtp = otps[username];
+    if (!storedOtp) {
+      return res.status(400).json({ error: 'OTP not found or expired' });
+    }
+
+    // Check if the OTP has expired (valid for 2 minutes)
+    const expirationTime = 2 * 60 * 1000; // 2 minutes in milliseconds
+    if (Date.now() - storedOtp.createdAt > expirationTime) {
+      delete otps[username]; // Remove expired OTP
+      return res.status(400).json({ error: 'OTP has expired' });
+    }
+
+    // Check if OTP has already been used
+    if (storedOtp.used) {
+      return res.status(400).json({ error: 'OTP has already been used' });
+    }
+
+    // Check if the entered OTP matches the stored OTP
+    if (parseInt(otp) !== storedOtp.code) {
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+
+    // OTP is valid, update the user's password in the database
+    const updatedInfo = storedOtp.updatedInfo;
+
+    await client.db('Database_Assignment').collection('player').updateOne(
+      { username },
+      { $set: updatedInfo }
+    );
+
+    // Mark the OTP as used
+    storedOtp.used = true;
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('Error in /verifyOTP:', err);
+    res.status(500).json({ error: 'Failed to verify OTP' });
+  }
+});
+
+
 // Request delete token endpoint
 app.post('/requestDeleteToken', async (req, res) => {
   const { passkey, username } = req.body; // Get passkey and username from request body
