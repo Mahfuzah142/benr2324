@@ -65,7 +65,7 @@ async function verifyUser(req, res, next) {
   req.user = user; // Attach user to the request object
   next(); // Proceed to next middleware or route handler
 }
-// Register endpoint
+
 // Register endpoint
 app.post('/register', async (req, res) => {
   try {
@@ -73,32 +73,26 @@ app.post('/register', async (req, res) => {
     let existingPlayer = await client.db("Database_Assignment").collection("player").findOne({ username: req.body.username });
     // Check if username already exists in admin collection
     let existingAdmin = await client.db("Database_Assignment").collection("admin").findOne({ username: req.body.username });
+
     if (existingPlayer || existingAdmin) {
       // If username exists in either collection, return 400 status
       return res.status(400).json({ error: "Username already exists" });
     }
 
-    // Determine role based on password provided and hash password
-    const role = req.body.password === process.env.ADMIN_PASSWORD ? 'admin' : 'player';
     // Password validation regex
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/;
     const password = req.body.password;
 
     // Check if password meets strength requirements
     if (!passwordRegex.test(password)) {
-    return res.status(400).send('Password does not meet strength requirements');
-    }
-    else{
-      const hash = bcrypt.hashSync(req.body.password, 10); // Hash the password with bcrypt
       return res.status(400).send('Password does not meet strength requirements');
     }
 
-    const hash = bcrypt.hashSync(req.body.password, 10); // Hash the password with bcrypt
     // Hash the password with bcrypt
-    
+    const hash = bcrypt.hashSync(password, 10); 
 
     // Determine role based on password provided
-    
+    const role = password === process.env.ADMIN_PASSWORD ? 'admin' : 'player';
 
     // Insert new user into the appropriate collection based on role
     let result = await client.db("Database_Assignment").collection(role).insertOne({
@@ -108,6 +102,7 @@ app.post('/register', async (req, res) => {
       email: req.body.email,
       role: role
     });
+
     // Respond based on role
     if (role === 'admin') {
       console.log('Admin registration successful:', result); // Log admin registration success
@@ -121,6 +116,7 @@ app.post('/register', async (req, res) => {
     res.status(500).json({ error: 'Registration failed' }); // Send error response
   }
 });
+
 // Login endpoint
 app.post('/login', async (req, res) => {
   try {
