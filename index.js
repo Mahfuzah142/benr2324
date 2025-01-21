@@ -667,7 +667,6 @@ app.post('/inventory', verifyUser, async (req, res) => {
     res.status (500).json({ error: 'Failed to create inventory item' }); // Send error response
   }
 });
-// Get inventory items endpoint
 app.get('/inventory/:username', async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -681,26 +680,39 @@ app.get('/inventory/:username', async (req, res) => {
     }
 
     // Verify JWT token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      console.error('JWT verification failed:', err.message);
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+
     // Ensure username from token matches the request
     if (decoded.username !== req.params.username) {
       return res.status(403).json({ error: "Unauthorized access. Token does not match username." });
     }
 
     console.log(`Fetching inventory items for username: ${decoded.username}`);
-    const items = await client.db("Database_Assignment").collection("inventory").find({ username: decoded.username }).toArray();
+    
+    // Query database for inventory items
+    const items = await client
+      .db("Database_Assignment")
+      .collection("inventory")
+      .find({ username: decoded.username })
+      .toArray();
 
     if (items.length === 0) {
-      return res.status(404).json({ error: 'Inventory items not found for this username' });
+      return res.status(404).json({ error: 'Inventory items not found for this username.' });
     }
 
-    res.json({ message: 'Inventory items fetched successfully', data: items });
+    res.json({ message: 'Inventory items fetched successfully.', data: items });
   } catch (err) {
-    console.error('Error fetching inventory items:', err);
-    res.status(403).json({ error: 'Invalid or expired token' });
+    console.error('Unexpected error in inventory retrieval:', err.message);
+    res.status(500).json({ error: 'Internal server error. Please try again later.' });
   }
 });
+
 // Update inventory endpoint
 app.patch('/inventory', verifyUser, async (req, res) => {
   try {
