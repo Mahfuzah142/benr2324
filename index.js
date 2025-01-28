@@ -185,13 +185,13 @@ app.post('/register', async (req, res) => {
 app.post('/login', async (req, res) => {
   try {
     const username = req.body.username;
-    console.log('Login attempt for username:', username);
-
+    console.log('Login attempt for username:', username); // Log login attempt
+    
     // Check if user is currently locked out
     if (loginAttempts[username] && loginAttempts[username].count >= MAX_FAILED_ATTEMPTS) {
       const lastAttemptTime = loginAttempts[username].lastAttemptTime;
       const timeSinceLastAttempt = Date.now() - lastAttemptTime;
-
+      
       if (timeSinceLastAttempt < LOCKOUT_DURATION) {
         const timeLeft = (LOCKOUT_DURATION - timeSinceLastAttempt) / 1000; // in seconds
         return res.status(403).json({ error: `Account locked. Try again in ${Math.ceil(timeLeft)} seconds.` });
@@ -223,17 +223,13 @@ app.post('/login', async (req, res) => {
       // Reset failed attempts on successful login
       loginAttempts[username] = { count: 0, lastAttemptTime: null };
 
-      // Generate JWT token using RS256
+      // Generate JWT token
       const token = jwt.sign(
         { username: user.username, role: user.role }, 
-        privateKey,  // Use the private key for RS256
-        {
-          algorithm: 'RS256',  // Explicitly set the algorithm to RS256
-          expiresIn: '1h',     // Set token expiry (1 hour)
-        }
+        process.env.JWT_SECRET,  // Use secret from .env file
+        { expiresIn: '1h' }  // Set token expiry (1 hour)
       );
 
-      // Verify the token using the public key (optional, for testing)
       jwt.verify(token, publicKey, { algorithms: ['RS256'] }, (err, decoded) => {
         if (err) {
           console.error('Token verification failed:', err.message);
@@ -265,7 +261,6 @@ app.post('/login', async (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   }
 });
-
 
 // Endpoint: User request password update
 app.post('/updateUser', async (req, res) => {
