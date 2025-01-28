@@ -3,6 +3,7 @@ const express = require('express'); // Import Express framework
 const app = express(); // Create an Express application
 const port = process.env.PORT || 5500; // Set the port to 5500 or environment variable
 const bcrypt = require('bcrypt'); // Import bcrypt for password hashing
+const fs = require('fs');
 const jwt = require('jsonwebtoken'); // Import JSON Web Token for authentication
 const path = require('path'); // Import path module for working with file and directory paths
 const cors = require('cors'); // Import CORS for cross-origin resource sharing
@@ -10,6 +11,8 @@ const loginAttempts = {}; // This will hold the username, failed attempts count 
 const MAX_FAILED_ATTEMPTS = 3; // Max allowed attempts before lockout
 const LOCKOUT_DURATION = 10 * 60 * 1000; // Lockout duration in milliseconds (10 minutes)
 const nodemailer = require('nodemailer');
+const privateKey = fs.readFileSync('C:\\Users\\Mahfuzah\\private.key', 'utf8');
+const publicKey = fs.readFileSync('C:\\Users\\Mahfuzah\\public.key', 'utf8');
 const { MongoClient, ObjectId, ServerApiVersion } = require('mongodb'); // Import MongoDB client and necessary classes
 require('dotenv').config(); // Import dotenv for environment variables
 // MongoDB connection URI
@@ -182,13 +185,13 @@ app.post('/register', async (req, res) => {
 app.post('/login', async (req, res) => {
   try {
     const username = req.body.username;
-    console.log('Login attempt for username:', username); // Log login attempt
-    
+    console.log('Login attempt for username:', username);
+
     // Check if user is currently locked out
     if (loginAttempts[username] && loginAttempts[username].count >= MAX_FAILED_ATTEMPTS) {
       const lastAttemptTime = loginAttempts[username].lastAttemptTime;
       const timeSinceLastAttempt = Date.now() - lastAttemptTime;
-      
+
       if (timeSinceLastAttempt < LOCKOUT_DURATION) {
         const timeLeft = (LOCKOUT_DURATION - timeSinceLastAttempt) / 1000; // in seconds
         return res.status(403).json({ error: `Account locked. Try again in ${Math.ceil(timeLeft)} seconds.` });
@@ -220,12 +223,24 @@ app.post('/login', async (req, res) => {
       // Reset failed attempts on successful login
       loginAttempts[username] = { count: 0, lastAttemptTime: null };
 
-      // Generate JWT token
+      // Generate JWT token using RS256
       const token = jwt.sign(
         { username: user.username, role: user.role }, 
-        process.env.JWT_SECRET,  // Use secret from .env file
-        { expiresIn: '1h' }  // Set token expiry (1 hour)
+        privateKey,  // Use the private key for RS256
+        {
+          algorithm: 'RS256',  // Explicitly set the algorithm to RS256
+          expiresIn: '1h',     // Set token expiry (1 hour)
+        }
       );
+
+      // Verify the token using the public key (optional, for testing)
+      jwt.verify(token, publicKey, { algorithms: ['RS256'] }, (err, decoded) => {
+        if (err) {
+          console.error('Token verification failed:', err.message);
+        } else {
+          console.log('Token is valid:', decoded);
+        }
+      });
 
       res.json({ message: "Login successful", token: token, role: user.role });
     } else {
@@ -250,6 +265,7 @@ app.post('/login', async (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   }
 });
+
 
 // Endpoint: User request password update
 app.post('/updateUser', async (req, res) => {
