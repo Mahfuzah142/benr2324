@@ -3,7 +3,6 @@ const express = require('express'); // Import Express framework
 const app = express(); // Create an Express application
 const port = process.env.PORT || 5500; // Set the port to 5500 or environment variable
 const bcrypt = require('bcrypt'); // Import bcrypt for password hashing
-const fs = require('fs');
 const jwt = require('jsonwebtoken'); // Import JSON Web Token for authentication
 const path = require('path'); // Import path module for working with file and directory paths
 const cors = require('cors'); // Import CORS for cross-origin resource sharing
@@ -11,8 +10,6 @@ const loginAttempts = {}; // This will hold the username, failed attempts count 
 const MAX_FAILED_ATTEMPTS = 3; // Max allowed attempts before lockout
 const LOCKOUT_DURATION = 10 * 60 * 1000; // Lockout duration in milliseconds (10 minutes)
 const nodemailer = require('nodemailer');
-const privateKey = fs.readFileSync('C:\\Users\\Mahfuzah\\private.key', 'utf8');
-const publicKey = fs.readFileSync('C:\\Users\\Mahfuzah\\public.key', 'utf8');
 const { MongoClient, ObjectId, ServerApiVersion } = require('mongodb'); // Import MongoDB client and necessary classes
 require('dotenv').config(); // Import dotenv for environment variables
 // MongoDB connection URI
@@ -229,14 +226,6 @@ app.post('/login', async (req, res) => {
         process.env.JWT_SECRET,  // Use secret from .env file
         { expiresIn: '1h' }  // Set token expiry (1 hour)
       );
-
-      jwt.verify(token, publicKey, { algorithms: ['RS256'] }, (err, decoded) => {
-        if (err) {
-          console.error('Token verification failed:', err.message);
-        } else {
-          console.log('Token is valid:', decoded);
-        }
-      });
 
       res.json({ message: "Login successful", token: token, role: user.role });
     } else {
